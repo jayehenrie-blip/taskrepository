@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e16">
+<title>Task Nebula</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+/* Colors come from the active theme (set as CSS variables by applyTheme). Everything is flat: no gradients or glows. */
+:root{--bg:#0b0f17;--ink:#e7eaf0;--muted:#8c95a8;--dim:#5d6578;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.16);
+  --panel:#141a26;--panel2:rgba(255,255,255,.04);--field:rgba(0,0,0,.3);--accent:#5eead4;--accent-soft:rgba(94,234,212,.14);
+  --accent-line:rgba(94,234,212,.5);--accent-ink:#ccfbf1;--toast-bg:#e7eaf0;--toast-ink:#0b0f17;--fab-bg:#5eead4;--fab-ink:#04201c;--alert:#fca5a5;--warn:#fcd34d}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+  font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;
+  -webkit-tap-highlight-color:transparent;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:block;cursor:grab}
+canvas#c.dragging{cursor:grabbing}
+
+.top{position:fixed;left:0;right:0;top:0;z-index:10;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;background:var(--bg);border-bottom:1px solid var(--line)}
+.row1{display:flex;align-items:center;gap:8px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:15px}
+.logo{width:20px;height:20px;border-radius:50%;position:relative;background:var(--p1)}
+.logo::after{content:"";position:absolute;width:9px;height:9px;border-radius:50%;right:-7px;top:-3px;background:var(--p3);border:2px solid var(--bg)}
+.spacer{flex:1}
+.sync{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);padding:5px 10px;border:1px solid var(--line);border-radius:999px}
+.sync .dot{width:7px;height:7px;border-radius:50%;background:var(--p2)}
+.icon-btn{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);background:var(--panel2)}
+.icon-btn:hover{border-color:var(--line2)}
+.icon-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chips{display:flex;gap:7px;margin-top:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;font-size:12.5px;
+  border:1px solid var(--line);background:var(--panel2);color:var(--ink);white-space:nowrap}
+.chip b{font-weight:600;color:var(--muted);font-size:11px}
+.chip.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent-ink)}
+.chip.on b{color:var(--accent-ink)}
+.chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+/* Theme picker */
+.themes{position:fixed;right:12px;top:calc(60px + env(safe-area-inset-top));z-index:30;width:min(340px,calc(100vw - 24px));
+  background:var(--panel);border:1px solid var(--line2);border-radius:16px;padding:12px;box-shadow:0 12px 40px rgba(0,0,0,.35);transition:opacity .15s,transform .15s}
+.themes.hidden{opacity:0;transform:translateY(-6px);pointer-events:none}
+.themes h4{margin:2px 4px 10px;font-size:13px;font-weight:700}
+.tcard{display:flex;gap:12px;align-items:center;width:100%;text-align:left;padding:8px;border-radius:12px;border:1px solid transparent}
+.tcard+.tcard{margin-top:4px}
+.tcard:hover{background:var(--panel2)}
+.tcard.on{border-color:var(--accent-line);background:var(--accent-soft)}
+.tcard svg{width:96px;height:64px;border-radius:9px;flex:none;border:1px solid var(--line)}
+.tcard b{display:block;font-size:14px}
+.tcard span{font-size:12px;color:var(--muted)}
+
+.fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:12;width:58px;height:58px;border-radius:50%;
+  background:var(--fab-bg);color:var(--fab-ink);font-size:30px;font-weight:300;line-height:1;
+  box-shadow:0 6px 18px rgba(0,0,0,.28);display:grid;place-items:center;transition:transform .2s,opacity .2s}
+.fab:active{transform:scale(.94)}
+.keybtn{position:fixed;left:16px;bottom:calc(28px + env(safe-area-inset-bottom));z-index:12;padding:9px 14px;border-radius:999px;
+  border:1px solid var(--line2);background:var(--panel);font-size:12.5px;font-weight:600;display:flex;gap:7px;align-items:center;transition:opacity .2s}
+.keybtn .sw{display:flex}
+.keybtn .sw i{width:9px;height:9px;border-radius:50%;margin-right:-2px;border:1px solid var(--panel)}
+body.sheet-open .fab, body.sheet-open .keybtn{opacity:0;pointer-events:none}
+@media (min-width:820px){ body.sheet-open .fab, body.sheet-open .keybtn{opacity:1;pointer-events:auto} body.sheet-open .fab{right:416px} }
+
+.legend{position:fixed;left:14px;bottom:calc(80px + env(safe-area-inset-bottom));z-index:13;width:min(330px,calc(100vw - 28px));
+  background:var(--panel);border:1px solid var(--line2);border-radius:16px;padding:14px 16px;
+  font-size:12.5px;transform-origin:bottom left;transition:transform .2s,opacity .2s;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.legend.hidden{opacity:0;transform:scale(.92);pointer-events:none}
+.legend h4{margin:0 0 8px;font-size:12px;color:var(--muted);font-weight:700}
+.legend .sec+.sec{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.lg-row{display:flex;align-items:center;gap:9px;margin:5px 0}
+.lg-row svg{width:22px;height:22px;flex:none;overflow:visible}
+.lg-row code{margin-left:auto;font:11px ui-monospace,Menlo,monospace;color:var(--ink);background:var(--panel2);border:1px solid var(--line);padding:1px 6px;border-radius:5px}
+.sizes{display:flex;align-items:flex-end;gap:10px;margin:6px 0 2px}
+.sizes-l{display:flex;justify-content:space-between;color:var(--muted);font-size:11px}
+.muted{color:var(--muted)}
+
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:20;max-height:76vh;overflow:auto;overscroll-behavior:contain;
+  background:var(--panel);border-top:1px solid var(--line2);border-radius:22px 22px 0 0;
+  padding:8px 18px calc(18px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.8,.2,1);
+  box-shadow:0 -12px 40px rgba(0,0,0,.3)}
+.sheet.open{transform:none}
+@media (min-width:820px){
+  .sheet{left:auto;right:16px;top:calc(118px + env(safe-area-inset-top));bottom:16px;width:384px;max-height:none;border:1px solid var(--line2);border-radius:20px;transform:translateX(112%)}
+  .sheet .grab{display:none}
+}
+.grab{width:40px;height:4px;border-radius:4px;background:var(--line2);margin:2px auto 10px}
+.sh-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.sh-title{font-weight:700;font-size:16px}
+.x{margin-left:auto;width:32px;height:32px;border-radius:50%;font-size:22px;line-height:1;color:var(--muted);display:grid;place-items:center}
+.x:hover{background:var(--panel2);color:var(--ink)}
+.listsel{display:flex;align-items:center;gap:7px;padding:5px 6px 5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel2);font-size:12.5px}
+.listsel select{background:transparent;border:0;outline:none;font-weight:600;padding-right:2px}
+.listsel select option{color:#000;background:#fff}
+.ldot{width:8px;height:8px;border-radius:50%}
+.chip-link{font-size:12.5px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);max-width:75%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.title-in{width:100%;background:transparent;border:0;outline:none;resize:none;font-size:21px;font-weight:700;line-height:1.25;padding:2px 0;overflow:hidden}
+.due-line{font-size:13px;color:var(--muted);margin:2px 0 14px}
+.due-line.late{color:var(--alert)}.due-line.soon{color:var(--warn)}
+.field{margin-bottom:14px}
+.flabel{font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px;border-radius:12px;background:var(--field);border:1px solid var(--line)}
+.seg button{padding:8px 4px;border-radius:9px;font-size:12.5px;font-weight:600;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px}
+.seg button i{width:9px;height:9px;border-radius:50%}
+.seg button.on{background:var(--panel);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line2)}
+.grid2{display:grid;grid-template-columns:1.25fr 1fr;gap:10px}
+.date-row{display:flex;gap:6px}
+input[type=date],.txt,textarea.notes{width:100%;background:var(--field);border:1px solid var(--line);border-radius:10px;padding:8px 10px;outline:none}
+input[type=date]:focus,.txt:focus,textarea.notes:focus{border-color:var(--accent-line)}
+textarea.notes{resize:vertical;min-height:64px}
+.mini{padding:7px 10px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);font-size:12px;white-space:nowrap}
+.mini:hover{border-color:var(--line2)}
+.toggle{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--field);font-size:13px}
+.toggle .knob{width:30px;height:18px;border-radius:999px;background:var(--line2);position:relative;flex:none;transition:background .2s}
+.toggle .knob::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:transform .2s,background .2s}
+.toggle.on .knob{background:var(--accent-soft)}.toggle.on .knob::after{transform:translateX(12px);background:var(--accent)}
+.subs{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.sub{display:flex;align-items:center;gap:10px;padding:9px 10px;border-top:1px solid var(--line)}
+.sub:first-child{border-top:0}
+.ck{width:18px;height:18px;border-radius:50%;border:2px solid var(--c);flex:none;display:grid;place-items:center}
+.sub.done .ck{background:var(--c)}
+.sub.done .ck::after{content:"";width:7px;height:4px;border-left:2px solid var(--panel);border-bottom:2px solid var(--panel);transform:rotate(-45deg) translate(1px,-1px)}
+.sub-t{flex:1;text-align:left;font-size:13.5px}
+.sub.done .sub-t{color:var(--dim);text-decoration:line-through}
+.sub-d{font-size:11.5px;color:var(--muted)}
+.sub-d.late{color:var(--alert)}
+.addsub{display:flex;gap:6px;margin-top:8px}
+.gt{font-size:11.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:10px 12px;border-radius:10px;background:var(--accent-soft);border:1px dashed var(--accent-line);margin-bottom:14px}
+.gt code{font:11.5px ui-monospace,Menlo,monospace;color:var(--ink);background:var(--panel);padding:2px 7px;border-radius:6px}
+.actions{display:flex;gap:8px}
+.primary{flex:1;padding:12px;border-radius:12px;font-weight:700;color:var(--fab-ink);background:var(--fab-bg)}
+.danger{padding:12px 16px;border-radius:12px;font-weight:600;color:var(--p1);border:1px solid var(--p1)}
+.danger.confirm{background:var(--p1);color:#fff}
+.qdates{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.qdates .mini.on{border-color:var(--accent-line);color:var(--accent-ink);background:var(--accent-soft)}
+
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,20px);z-index:30;opacity:0;pointer-events:none;
+  background:var(--toast-bg);color:var(--toast-ink);border-radius:12px;padding:10px 12px 10px 16px;font-size:13.5px;font-weight:500;display:flex;gap:14px;align-items:center;
+  transition:all .25s;box-shadow:0 10px 30px rgba(0,0,0,.3);max-width:calc(100vw - 32px)}
+.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast button{font-weight:700;color:inherit;text-decoration:underline;padding:4px 6px}
+.hint{position:fixed;left:50%;top:calc(126px + env(safe-area-inset-top));transform:translateX(-50%);z-index:9;font-size:12px;color:var(--muted);
+  background:var(--panel);border:1px solid var(--line);padding:6px 12px;border-radius:999px;white-space:nowrap;transition:opacity .6s;pointer-events:none}
+.hint.gone{opacity:0}
+.sync{cursor:pointer;background:var(--panel2)}
+.sync:hover{border-color:var(--line2)}
+.sync .dot.ok{background:#34d399}.sync .dot.busy{background:#f59e0b}.sync .dot.bad{background:#f87171}.sync .dot.off{background:#64748b}
+.overlay{position:fixed;inset:0;z-index:40;background:var(--bg);overflow:auto;display:flex;justify-content:center;padding:calc(28px + env(safe-area-inset-top)) 18px calc(28px + env(safe-area-inset-bottom))}
+.overlay.hidden{display:none}
+.ov-card{width:100%;max-width:460px;margin:auto 0}
+.ov-card h1{font-size:28px;line-height:1.1;margin:10px 0 8px}
+.ov-card p{color:var(--muted);margin:0 0 16px;font-size:15px;line-height:1.5}
+.ov-card ol{color:var(--muted);padding-left:20px;margin:0 0 18px;font-size:14.5px;line-height:1.55}
+.ov-card ol b{color:var(--ink)}
+.copyrow{display:flex;gap:6px;align-items:center;margin:4px 0 12px}
+.copyrow code{flex:1;font:12.5px ui-monospace,Menlo,monospace;background:var(--panel);border:1px solid var(--line);padding:9px 10px;border-radius:9px;overflow-wrap:anywhere}
+.big{width:100%;padding:14px;border-radius:12px;font-weight:700;font-size:15px;color:var(--fab-ink);background:var(--fab-bg);margin-top:6px}
+.big.ghost{background:transparent;color:var(--ink);border:1px solid var(--line2)}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px}
+.err{color:var(--alert);font-size:13.5px;margin:8px 0 0;min-height:1em}
+.set-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:13.5px}
+.set-row:first-of-type{border-top:0}
+.set-row span:first-child{color:var(--muted)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.btn-row .mini{padding:10px 12px;font-size:13px}
+@media (max-width:819px){ .sheet.compact{max-height:44vh} }
+.lay-row{margin:4px 0 14px}
+.lay-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px}
+.lay-top b{font-size:13.5px;font-weight:600}
+.lay-top span{font-size:12px;color:var(--muted);white-space:nowrap}
+.lay-top span.changed{color:var(--accent-ink)}
+.lay-hint{font-size:11.5px;color:var(--muted);margin-top:2px}
+input[type=range]{width:100%;accent-color:var(--accent);height:28px;margin:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<header class="top">
+  <div class="row1">
+    <div class="brand"><span class="logo"></span>Task Nebula</div>
+    <div class="spacer"></div>
+    <button class="sync" id="syncBtn" title="Sync now"><span class="dot" id="syncDot"></span><span id="syncTxt">Starting…</span></button>
+    <button class="icon-btn" id="setBtn" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+    <button class="icon-btn" id="fitBtn" title="Fit everything" aria-label="Fit everything">
+      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+
+
+<div class="overlay hidden" id="overlay"><div class="ov-card" id="ovCard"></div></div>
+
+<div class="hint" id="hint">Pinch or scroll to zoom · drag to move · tap a bubble</div>
+
+<button class="keybtn" id="keyBtn"><span class="sw" id="keySw"></span>Key</button>
+<button class="fab" id="fab" aria-label="Add task">+</button>
+
+<div class="legend hidden" id="legend"></div>
+
+<aside class="sheet" id="sheet" aria-live="polite"></aside>
+<div class="toast" id="toast"><span id="toastMsg"></span><button id="toastUndo">Undo</button></div>
+
+<script>
+(() => {
+'use strict';
+/* ---------- Constants & helpers ---------- */
+const PR = {
+  0:{name:'None',  color:'#8b95a7', light:'#cbd2de', dark:'#3c4352'},
+  3:{name:'Low',   color:'#3b82f6', light:'#a5c8ff', dark:'#1e3a8a'},
+  2:{name:'Medium',color:'#f59e0b', light:'#fde3a1', dark:'#92400e'},
+  1:{name:'High',  color:'#ef4444', light:'#fdb4b4', dark:'#7f1d1d'},
+};
+const PR_ORDER = [0,3,2,1];
+
+/* ---------- Themes (all flat: no gradients, no glows) ---------- */
+const THEMES = {
+  night:{ name:'Flat Night', blurb:'Dark sky, solid circles', shape:'circle', bg:'#0b0f17', stars:'#cfd8ea',
+    prio:{0:'#8b95a7',3:'#3b82f6',2:'#f59e0b',1:'#ef4444'},
+    cluster:h=>[`hsla(${h},35%,55%,.07)`,`hsla(${h},40%,70%,.22)`], clusterDash:true, clusterLabel:h=>`hsl(${h},45%,80%)`,
+    mark:'#ffffff', dayText:'#ffffff', label:'#e6eaf2', labelDim:'#8c95a8', labelBg:'rgba(11,15,23,.85)', tether:'rgba(148,163,184,.45)', accent:'#5eead4',
+    ui:{bg:'#0b0f17',ink:'#e7eaf0',muted:'#8c95a8',dim:'#5d6578',line:'rgba(255,255,255,.09)',line2:'rgba(255,255,255,.16)',panel:'#141a26',panel2:'rgba(255,255,255,.04)',
+        field:'rgba(0,0,0,.3)',accent:'#5eead4','accent-soft':'rgba(94,234,212,.14)','accent-line':'rgba(94,234,212,.5)','accent-ink':'#ccfbf1',
+        'toast-bg':'#e7eaf0','toast-ink':'#0b0f17','fab-bg':'#5eead4','fab-ink':'#04201c',alert:'#fca5a5',warn:'#fcd34d'}, scheme:'dark' },
+};
+let theme = THEMES.night;
+function mix(hex, bg, t){ const a=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)), b=[1,3,5].map(i=>parseInt(bg.slice(i,i+2),16));
+  return '#'+a.map((v,i)=>Math.round(b[i]+(v-b[i])*t).toString(16).padStart(2,'0')).join(''); }
+const DAY = 86400000;
+let today = (()=>{const d=new Date();d.setHours(0,0,0,0);return d;})();
+function refreshToday(){ const d=new Date(); d.setHours(0,0,0,0); if(d.getTime()!==today.getTime()){ today=d; return true; } return false; }
+const offDate = n => n==null ? null : new Date(today.getFullYear(), today.getMonth(), today.getDate()+n);
+const daysUntil = d => Math.round((d - today)/DAY);
+const pad = n => String(n).padStart(2,'0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const fromIso = s => { if(!s) return null; const [y,m,dd]=s.split('-').map(Number); return new Date(y,m-1,dd); };
+const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const rand = rng(7);
+
+// Google Tasks conventions
+function parseTitle(raw){ const m=String(raw).match(/^\s*!([123])\s*/); return m?{p:+m[1],title:raw.slice(m[0].length)}:{p:0,title:String(raw).trim()}; }
+const buildTitle = (p,title) => (p?`!${p} `:'') + title.trim();
+const isDoing = notes => /(^|\s)#doing\b/i.test(notes||'');
+const stripDoing = notes => (notes||'').replace(/(^|\s)#doing\b/ig,' ').replace(/^\s+/, '').replace(/[ \t]+\n/g,'\n').trim();
+const composeNotes = (doing,text) => doing ? ('#doing' + (text ? '\n'+text : '')) : text;
+const prioOf = t => parseTitle(t.raw).p;
+const labelOf = t => parseTitle(t.raw).title || '(untitled)';
+
+function dueText(t){
+  if(!t.due) return 'No due date';
+  const d=daysUntil(t.due);
+  if(d<0) return `Overdue by ${-d} day${d===-1?'':'s'}`;
+  if(d===0) return 'Due today'; if(d===1) return 'Due tomorrow';
+  return `Due in ${d} days · ${t.due.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}`;
+}
+function shortDue(t){ if(!t.due) return ''; const d=daysUntil(t.due); return d<0?`${-d}d late`:d===0?'Today':`${d}d`; }
+
+/* ---------- Data model (filled from Google Tasks) ---------- */
+const HUES = [195,255,160,220,285,180,315,240,35,120,340,205];
+let LISTS = [];           // {id, name, hue}
+let tasks = [];           // {id, list, parent, raw, notes, due(Date|null), status, completedAt}
+let uid = 0; const tmpId = () => 'tmp-'+Date.now().toString(36)+'-'+(++uid);
+const byId = id => tasks.find(t=>t.id===id);
+const childrenOf = t => tasks.filter(s=>s.parent===t.id);
+const listOf = id => LISTS.find(l=>l.id===id) || {id, name:'(list)', hue:200};
+const hubId = () => LISTS[0]?.id;
+
+/* ---------- Local storage (cache, settings, pending changes) ---------- */
+const store = {
+  get(k, d){ try{ const v=localStorage.getItem('tn-'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('tn-'+k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem('tn-'+k); }catch(e){} },
+};
+let CFG = store.get('cfg', {clientId:'', hint:'', hub:''});
+/* Layout settings (saved on this device). Every gap is a minimum, so shapes never overlap at any value. */
+const LAYOUT_DEFAULTS = {size:100, bubbleGap:6, satGap:3, listGap:50, urgentPull:100};
+let LAYOUT = Object.assign({}, LAYOUT_DEFAULTS, store.get('layout', {}));
+const saveLayout = () => store.set('layout', LAYOUT);
+const SZ = () => LAYOUT.size/100;
+const saveCfg = () => store.set('cfg', CFG);
+let lastSync = 0;
+function saveCache(){
+  store.set('cache', { at:lastSync, lists:LISTS, tasks:tasks.filter(t=>!t.id.startsWith('tmp-')||true).map(t=>({id:t.id,list:t.list,parent:t.parent,raw:t.raw,notes:t.notes,due:t.due?iso(t.due):null,status:t.status,completedAt:t.completedAt||null})) });
+}
+function loadCache(){
+  const c = store.get('cache', null); if(!c) return false;
+  LISTS = c.lists||[]; lastSync = c.at||0;
+  tasks = (c.tasks||[]).map(t=>({...t, due:fromIso(t.due)}));
+  return LISTS.length>0;
+}
+
+/* ---------- Google sign-in (OAuth redirect flow; works inside an installed app) ---------- */
+const SCOPE = 'https://www.googleapis.com/auth/tasks email';
+const REDIRECT = location.origin + location.pathname;
+let auth = store.get('auth', null);   // {token, exp}
+const tokenValid = () => !!(auth && auth.token && auth.exp > Date.now());
+function signIn(silent){
+  if(!CFG.clientId) { showSetup(); return; }
+  commitAllPending();
+  const st = Math.random().toString(36).slice(2)+Date.now().toString(36);
+  try{ sessionStorage.setItem('tn-state', st); }catch(e){}
+  store.set('authTry', Date.now());
+  const q = new URLSearchParams({ client_id:CFG.clientId, redirect_uri:REDIRECT, response_type:'token', scope:SCOPE,
+    include_granted_scopes:'true', state:st, prompt: silent ? 'none' : 'select_account' });
+  if(CFG.hint) q.set('login_hint', CFG.hint);
+  location.assign('https://accounts.google.com/o/oauth2/v2/auth?'+q.toString());
+}
+function consumeRedirect(){
+  const h = location.hash;
+  if(!/access_token=|error=/.test(h)) return null;
+  const q = new URLSearchParams(h.slice(1));
+  history.replaceState(null, '', location.pathname + location.search);
+  let expected=null; try{ expected=sessionStorage.getItem('tn-state'); sessionStorage.removeItem('tn-state'); }catch(e){}
+  if(!expected || q.get('state')!==expected) return 'state_mismatch';
+  if(q.get('error')) return q.get('error');
+  auth = { token:q.get('access_token'), exp: Date.now() + (+q.get('expires_in')||3600)*1000 - 60000 };
+  store.set('auth', auth);
+  return 'ok';
+}
+async function learnEmail(){
+  if(CFG.hint || !tokenValid()) return;
+  try{ const r = await fetch('https://oauth2.googleapis.com/tokeninfo?access_token='+encodeURIComponent(auth.token)); const j = await r.json(); if(j.email){ CFG.hint=j.email; saveCfg(); renderStatus(); } }catch(e){}
+}
+function maybeSilentRefresh(){
+  // Quietly renew an expired sign-in, but never while the person is editing, and not in a loop.
+  if(!CFG.clientId || tokenValid() || !navigator.onLine) return false;
+  if(state.mode) return false;
+  if(Date.now() - store.get('authTry',0) < 120000) return false;
+  signIn(true); return true;
+}
+async function signOut(){
+  const tok = auth?.token; auth=null; store.del('auth');
+  if(tok){ try{ await fetch('https://oauth2.googleapis.com/revoke?token='+encodeURIComponent(tok), {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}}); }catch(e){} }
+  CFG.hint=''; saveCfg(); tasks=[]; LISTS=[]; queue=[]; store.del('cache'); store.del('queue');
+  syncClusters(); renderChips(); closeSheet(); showSignIn();
+}
+
+/* ---------- Google Tasks API ---------- */
+const API = 'https://tasks.googleapis.com/tasks/v1/';
+async function api(method, path, body){
+  if(!tokenValid()){ const e=new Error('Not signed in'); e.status=401; throw e; }
+  let r;
+  try{
+    r = await fetch(API+path, { method, headers: Object.assign({Authorization:'Bearer '+auth.token}, body!==undefined?{'Content-Type':'application/json'}:{}),
+      body: body!==undefined ? JSON.stringify(body) : undefined });
+  }catch(err){ const e=new Error('Network'); e.network=true; throw e; }
+  if(r.status===204) return null;
+  if(!r.ok){
+    const e=new Error('HTTP '+r.status); e.status=r.status;
+    try{ e.detail=(await r.json()).error?.message; }catch(x){}
+    if(r.status===401){ auth=null; store.del('auth'); }
+    throw e;
+  }
+  const txt = await r.text(); return txt ? JSON.parse(txt) : null;
+}
+const dueToApi = d => d ? iso(d)+'T00:00:00.000Z' : null;
+const dueFromApi = s => s ? fromIso(s.slice(0,10)) : null;
+async function getAll(path, key){
+  let out=[], page=null;
+  do{ const j = await api('GET', path + (path.includes('?')?'&':'?') + 'maxResults=100' + (page?'&pageToken='+encodeURIComponent(page):''));
+      out = out.concat(j?.[key]||j?.items||[]); page = j?.nextPageToken; } while(page);
+  return out;
+}
+
+/* ---------- Pull everything from Google Tasks ---------- */
+let syncing=false, syncErr='';
+async function pull(){
+  if(syncing || !tokenValid() || !navigator.onLine) return;
+  if(queue.length || pendingCount()) { flush(); return; }
+  syncing=true; syncErr=''; renderStatus();
+  try{
+    const lists = await getAll('users/@me/lists', 'items');
+    const since = new Date(Date.now()-14*DAY).toISOString();
+    const per = await Promise.all(lists.map(l => getAll(`lists/${encodeURIComponent(l.id)}/tasks?showCompleted=true&showHidden=false&completedMin=${encodeURIComponent(since)}`, 'items').then(items=>[l,items])));
+    // Never let a pull overwrite a change the person made while it was running.
+    if(queue.length || pendingCount()){ syncing=false; flush(); return; }
+    const old = new Map(tasks.map(t=>[t.id,t]));
+    const fresh=[];
+    for(const [l,items] of per) for(const it of items){
+      if(it.deleted) continue;
+      const prev = old.get(it.id) || {};
+      fresh.push(Object.assign(prev, { id:it.id, list:l.id, parent:it.parent||null, raw:it.title||'', notes:it.notes||'',
+        due:dueFromApi(it.due), status:it.status||'needsAction', completedAt:it.completed||null }));
+    }
+    // drop subtasks whose parent isn't present (e.g. parent completed long ago)
+    const ids = new Set(fresh.map(t=>t.id));
+    for(const t of fresh) if(t.parent && !ids.has(t.parent)) t.parent=null;
+    tasks = fresh;
+    setLists(lists.map(l=>({id:l.id, name:l.title||'(untitled list)'})));
+    lastSync = Date.now(); saveCache();
+    if(!clusters.length || !settled) initialLayout(); else { syncClusters(); changed(); }
+    if(state.mode==='task' && state.sel && !byId(state.sel)) closeSheet();
+  }catch(e){
+    if(e.status===401){ needAuth(); }
+    else syncErr = e.network ? 'offline' : (e.detail || e.message);
+  }finally{ syncing=false; renderStatus(); }
+}
+function setLists(raw){
+  // Hub (center) = chosen list, else one named Inbox, else "My Tasks", else the busiest.
+  const count = id => tasks.filter(t=>t.list===id && !t.parent && t.status!=='completed').length;
+  let hub = raw.find(l=>l.id===CFG.hub) || raw.find(l=>/inbox/i.test(l.name)) || raw.find(l=>/^my tasks$/i.test(l.name)) || [...raw].sort((a,b)=>count(b.id)-count(a.id))[0];
+  const ordered = hub ? [hub, ...raw.filter(l=>l!==hub)] : raw;
+  const prevHue = new Map(LISTS.map(l=>[l.id,l.hue]));
+  LISTS = ordered.map((l,i)=>({id:l.id, name:l.name, hue: prevHue.get(l.id) ?? HUES[raw.indexOf(l) % HUES.length]}));
+}
+
+/* ---------- Pending changes queue (survives closing the app and going offline) ---------- */
+let queue = store.get('queue', []);
+const saveQueue = () => store.set('queue', queue);
+function enqueue(op){ queue.push(op); saveQueue(); renderStatus(); flush(); }
+function remapId(from, to){
+  for(const t of tasks){ if(t.id===from) t.id=to; if(t.parent===from) t.parent=to; }
+  for(const op of queue){ if(op.id===from) op.id=to; if(op.parent===from) op.parent=to; }
+  if(state.sel===from) state.sel=to;
+  for(const [k,v] of [...patchTimers]) if(k===from){ patchTimers.delete(k); patchTimers.set(to,v); }
+}
+let flushing=false;
+async function flush(){
+  if(flushing || !queue.length) { renderStatus(); return; }
+  if(!navigator.onLine){ renderStatus(); return; }
+  if(!tokenValid()){ needAuth(); return; }
+  flushing=true; renderStatus();
+  let needPull=false;
+  try{
+    while(queue.length){
+      const op=queue[0];
+      try{ await runOp(op); queue.shift(); saveQueue(); }
+      catch(e){
+        if(e.status===401){ needAuth(); return; }
+        if(e.network || e.status>=500 || e.status===429){ setTimeout(flush, 15000); return; }
+        if(e.status===404 && (op.type==='delete' || op.type==='patch')){ queue.shift(); saveQueue(); needPull=true; continue; }
+        queue.shift(); saveQueue(); needPull=true;
+        showToast(`Couldn’t save to Google Tasks: ${e.detail||e.message}`);
+      }
+    }
+    needPull=true;
+  }finally{
+    flushing=false; renderStatus(); saveCache();
+    if(needPull && !queue.length) setTimeout(pull, 400);
+  }
+}
+async function runOp(op){
+  const L = id => encodeURIComponent(id);
+  if(op.type==='insert'){
+    const body = {title:op.title, notes:op.notes||undefined, due:op.due||undefined};
+    const res = await api('POST', `lists/${L(op.list)}/tasks${op.parent?'?parent='+L(op.parent):''}`, body);
+    remapId(op.id, res.id); saveCache();
+  } else if(op.type==='patch'){
+    await api('PATCH', `lists/${L(op.list)}/tasks/${L(op.id)}`, op.fields);
+  } else if(op.type==='move'){
+    await api('POST', `lists/${L(op.from)}/tasks/${L(op.id)}/move?destinationTasklist=${L(op.to)}`);
+    // The docs don't say whether subtasks follow their parent; move any that stayed behind.
+    for(const sid of op.subs||[]){
+      try{ await api('POST', `lists/${L(op.from)}/tasks/${L(sid)}/move?destinationTasklist=${L(op.to)}&parent=${L(op.id)}`); }
+      catch(e){ if(e.status!==404 && e.status!==400) throw e; }
+    }
+  } else if(op.type==='delete'){
+    try{ await api('DELETE', `lists/${L(op.list)}/tasks/${L(op.id)}`); }catch(e){ if(e.status!==404) throw e; }
+  }
+}
+// Text edits are batched so typing doesn't send a request per keystroke.
+const patchTimers = new Map();   // id -> {timer, fields}
+function queuePatch(t, fields, delay=0){
+  const cur = patchTimers.get(t.id) || {fields:{}};
+  clearTimeout(cur.timer); Object.assign(cur.fields, fields);
+  const commit = () => { patchTimers.delete(t.id); enqueue({type:'patch', id:t.id, list:t.list, fields:cur.fields}); };
+  if(delay){ cur.timer=setTimeout(commit, delay); patchTimers.set(t.id, cur); renderStatus(); } else { patchTimers.delete(t.id); commit(); }
+}
+const pendingDeletes = new Map(); // id -> {timer, ops}
+function pendingCount(){ return patchTimers.size + pendingDeletes.size; }
+function commitAllPending(){
+  for(const [id,p] of [...patchTimers]){ clearTimeout(p.timer); patchTimers.delete(id); queue.push({type:'patch', id, list:byId(id)?.list, fields:p.fields}); }
+  for(const [id,p] of [...pendingDeletes]){ clearTimeout(p.timer); pendingDeletes.delete(id); queue.push(...p.ops); }
+  saveQueue();
+}
+function needAuth(){
+  renderStatus();
+  maybeSilentRefresh();
+}
+
+/* ---------- Sync status pill ---------- */
+const syncBtn=document.getElementById('syncBtn'), syncDot=document.getElementById('syncDot'), syncTxt=document.getElementById('syncTxt');
+function ago(ms){ const m=Math.round((Date.now()-ms)/60000); return m<1?'just now':m<60?`${m}m ago`:`${Math.round(m/60)}h ago`; }
+function renderStatus(){
+  let txt, cls;
+  const pend = queue.length + pendingCount();
+  if(!CFG.clientId){ txt='Set up'; cls='bad'; }
+  else if(!navigator.onLine){ txt = pend?`Offline · ${pend} unsaved`:'Offline'; cls='off'; }
+  else if(!tokenValid()){ txt = pend?`Sign in to save ${pend}`:'Sign in'; cls='bad'; }
+  else if(flushing || pend){ txt='Saving…'; cls='busy'; }
+  else if(syncing){ txt='Syncing…'; cls='busy'; }
+  else if(syncErr && syncErr!=='offline'){ txt='Sync error'; cls='bad'; }
+  else { txt = lastSync ? `Synced ${ago(lastSync)}` : 'Not synced'; cls='ok'; }
+  syncTxt.textContent=txt; syncDot.className='dot '+cls;
+  syncBtn.title = syncErr && syncErr!=='offline' ? syncErr : 'Sync now';
+}
+syncBtn.onclick = ()=>{
+  if(!CFG.clientId) return showSetup();
+  if(!tokenValid()) return signIn(false);
+  commitAllPending(); flush(); if(!queue.length) pull();
+};
+setInterval(()=>{ renderStatus(); if(refreshToday()) { layoutClusters(false); changed(); } }, 30000);
+setInterval(()=>{ if(document.visibilityState==='visible' && !state.mode) pull(); }, 5*60000);
+addEventListener('online', ()=>{ renderStatus(); flush(); });
+addEventListener('offline', renderStatus);
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='hidden'){ commitAllPending(); return; }
+  if(refreshToday()) { layoutClusters(false); changed(); }
+  if(!tokenValid()) { needAuth(); return; }
+  flush(); if(Date.now()-lastSync > 60000 && !state.mode) pull();
+});
+addEventListener('pagehide', commitAllPending);
+
+/* ---------- State ---------- */
+const state = { filter:'all', showDone:false, sel:null, mode:null };
+const FILTERS = [
+  {id:'all',     name:'All',          test:()=>true},
+  {id:'overdue', name:'Overdue',      test:t=>t.due && daysUntil(t.due)<0},
+  {id:'week',    name:'Due ≤ 7 days', test:t=>t.due && daysUntil(t.due)<=7},
+  {id:'high',    name:'High',         test:t=>prioOf(t)===1, dot:true},
+  {id:'doing',   name:'In progress',  test:t=>isDoing(t.notes)},
+  {id:'undated', name:'No date',      test:t=>!t.due},
+];
+function matches(t){
+  const f = FILTERS.find(f=>f.id===state.filter);
+  if(f.id==='all') return true;
+  if(t.status!=='completed' && f.test(t)) return true;
+  return !t.parent && childrenOf(t).some(s=>s.status!=='completed' && f.test(s));
+}
+
+/* ---------- Geometry ---------- */
+// Size: today/overdue are by far the largest, then it drops off quickly over the next few days.
+// today/overdue 36 · 1d 26 · 2d 21 · 3d 18 · 7d 13 · 14d 12 · 30d+ 9 · no date 8
+function radiusOf(t){
+  if(t.status==='completed') return 9*SZ();
+  if(!t.due) return 8*SZ();
+  const d = Math.max(0, daysUntil(t.due));
+  return (9 + 22*Math.exp(-d/1.8) + 5*clamp(1 - d/30, 0, 1))*SZ();
+}
+// Extra space taken by the overdue / in-progress outlines, so nothing touches them.
+function ringPad(t){
+  if(t.status==='completed') return 1;
+  const late = t.due && daysUntil(t.due)<0, doing = isDoing(t.notes);
+  return (late && doing) ? 15 : late ? 10.5 : doing ? 7 : 1;
+}
+function subR(s){
+  const k = Math.sqrt(SZ());
+  if(s.status==='completed') return 4.5*k;
+  if(!s.due) return 5*k;
+  const d=daysUntil(s.due); return (d<=0 ? 7.5 : d<=7 ? 6.5 : 5.5)*k;
+}
+function haloFor(t, r){
+  const subs = childrenOf(t);
+  const base = r + ringPad(t);
+  if(!subs.length) return base;
+  return base + LAYOUT.satGap + 2*Math.max(...subs.map(s=>subR(s) + (s.due && daysUntil(s.due)<0 && s.status!=='completed' ? 3.5 : 0)));
+}
+
+let clusters = [];
+function syncClusters(){
+  const old = new Map(clusters.map(c=>[c.id,c]));
+  const fresh = !clusters.length;
+  let added=false;
+  clusters = LISTS.map(l=>{ let c=old.get(l.id); if(!c){ c={id:l.id,x:0,y:0,tx:0,ty:0,R:70}; added=true; } c.list=l; return c; });
+  if(clusters.length) layoutClusters(fresh || added);
+}
+const clusterOf = id => clusters.find(c=>c.id===id) || clusters[0];
+
+function nodesNow(now){
+  return tasks.filter(t=>!t.parent && clusters.length && (t.status!=='completed' || state.showDone || (t.fadeT && now - t.fadeT < 700)));
+}
+const labelHalf = c => (c.list.name.length*10.5 + 50)/0.6/2;
+function layoutClusters(initial){
+  const now = performance.now();
+  const nodes = nodesNow(now).filter(t=>!(t.status==='completed' && !state.showDone));
+  for(const c of clusters){
+    const mem = nodes.filter(n=>n.list===c.id);
+    const area = mem.reduce((a,n)=>a + Math.PI*Math.pow(haloFor(n, radiusOf(n))+2+LAYOUT.bubbleGap/2,2), 0);
+    c.R = Math.max(66, Math.sqrt(area/Math.PI/0.5) + 16);
+    c.count = mem.filter(n=>n.status!=='completed').length;
+    c.overdue = mem.filter(n=>n.status!=='completed' && n.due && daysUntil(n.due)<0).length;
+  }
+  if(initial){
+    const [hub,...rest] = clusters;
+    hub.tx = hub.ty = 0;
+    rest.forEach((c,i)=>{ const a=-Math.PI/2 + i*2*Math.PI/rest.length; const d=hub.R+c.R+LAYOUT.listGap; c.tx=Math.cos(a)*d; c.ty=Math.sin(a)*d; });
+  }
+  for(let it=0; it<500; it++){
+    for(let i=0;i<clusters.length;i++) for(let j=i+1;j<clusters.length;j++){
+      const a=clusters[i], b=clusters[j];
+      let dx=b.tx-a.tx, dy=b.ty-a.ty, d=Math.hypot(dx,dy)||0.01;
+      const min=a.R+b.R+LAYOUT.listGap;
+      if(d<min){ const push=(min-d); dx/=d; dy/=d;
+        if(i===0){ b.tx+=dx*push; b.ty+=dy*push; }
+        else { a.tx-=dx*push/2; a.ty-=dy*push/2; b.tx+=dx*push/2; b.ty+=dy*push/2; } }
+    }
+    for(let i=0;i<clusters.length;i++) for(let j=i+1;j<clusters.length;j++){
+      const a=clusters[i], b=clusters[j];
+      const ly = (b.ty-b.R) - (a.ty-a.R), dx=b.tx-a.tx;
+      const need = labelHalf(a)+labelHalf(b)+20;
+      if(Math.abs(ly)<70 && Math.abs(dx)<need){ const push=(need-Math.abs(dx))*(dx<0?-1:1);
+        if(i===0) b.tx+=push; else { a.tx-=push/2; b.tx+=push/2; } }
+    }
+    for(let i=1;i<clusters.length;i++){ clusters[i].tx*=0.996; clusters[i].ty*=0.996; }
+  }
+  if(initial) clusters.forEach(c=>{c.x=c.tx;c.y=c.ty;});
+}
+
+/* ---------- Simulation ---------- */
+let alpha = 1;
+function reheat(a=0.8){ alpha=Math.max(alpha,a); }
+function placeNew(t){
+  const c = clusterOf(t.list); const a = rand()*Math.PI*2, d = rand()*c.R*0.5;
+  t.x = c.x + Math.cos(a)*d; t.y = c.y + Math.sin(a)*d; t.vx=t.vy=0; t.r = t.r ?? 0;
+}
+function step(nodes){
+  for(const n of nodes){
+    if(n.x==null) placeNew(n);
+    const c = clusterOf(n.list);
+    const pull = (0.02 + n.r*0.0012*LAYOUT.urgentPull/100) * alpha;
+    n.x += (c.x-n.x)*pull; n.y += (c.y-n.y)*pull;
+  }
+  for(let pass=0; pass<6; pass++){
+    for(let i=0;i<nodes.length;i++){
+      const a=nodes[i];
+      for(let j=i+1;j<nodes.length;j++){
+        const b=nodes[j];
+        let dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy);
+        const min = a.halo + b.halo + (a.list===b.list ? LAYOUT.bubbleGap : Math.max(40, LAYOUT.bubbleGap));
+        if(d<min){
+          if(d<0.01){ dx=rand()-.5; dy=rand()-.5; d=Math.hypot(dx,dy); }
+          const o=(min-d)/d;
+          const wa = b.halo/(a.halo+b.halo), wb = 1-wa;
+          a.x-=dx*o*wa; a.y-=dy*o*wa; b.x+=dx*o*wb; b.y+=dy*o*wb;
+        }
+      }
+    }
+  }
+  alpha = Math.max(0, alpha*0.985 - 0.0005);
+}
+function subPositions(t){
+  const subs = childrenOf(t); const n=subs.length;
+  subs.forEach((s,i)=>{
+    const ring = t.r + ringPad(t) + LAYOUT.satGap + 8; const step = Math.min((Math.PI*2)/Math.max(n,1), Math.max(0.55, 22/ring));
+    const a = -Math.PI/2 + (i - (n-1)/2) * step;
+    const sr = subR(s); s.sr = s.sr ?? sr; s.sr += (sr - s.sr)*0.15;
+    const d = t.r + ringPad(t) + LAYOUT.satGap + s.sr + (s.due && daysUntil(s.due)<0 && s.status!=='completed' ? 3.5 : 0);
+    s.x = t.x + Math.cos(a)*d; s.y = t.y + Math.sin(a)*d;
+  });
+  return subs;
+}
+
+/* ---------- Canvas & camera ---------- */
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let W=0,H=0,DPR=1;
+const cam = {x:0,y:0,k:1}; let camTween=null;
+const CY = () => H/2 + 34;
+function resize(){ DPR=Math.min(2,window.devicePixelRatio||1); W=innerWidth; H=innerHeight; cv.width=W*DPR; cv.height=H*DPR; }
+addEventListener('resize', resize); resize();
+const s2w = (sx,sy) => ({x:(sx-W/2)/cam.k+cam.x, y:(sy-CY())/cam.k+cam.y});
+const w2s = (x,y) => [(x-cam.x)*cam.k+W/2, (y-cam.y)*cam.k+CY()];
+function zoomAt(sx,sy,k){ const w=s2w(sx,sy); cam.k=clamp(k,0.22,4); cam.x=w.x-(sx-W/2)/cam.k; cam.y=w.y-(sy-CY())/cam.k; }
+function tweenTo(x,y,k,ms=520){ camTween={from:{...cam},to:{x,y,k:clamp(k,0.22,4)},t0:performance.now(),ms}; }
+function fitAll(animate=true){
+  if(!clusters.length) return;
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const c of clusters){ const lw=Math.max(c.R, labelHalf(c)*0.8); x0=Math.min(x0,c.tx-lw); y0=Math.min(y0,c.ty-c.R-40); x1=Math.max(x1,c.tx+lw); y1=Math.max(y1,c.ty+c.R); }
+  const sheetW = (W>=820 && state.mode) ? 400 : 0;
+  const sheetH = (W<820 && state.mode==='layout') ? H*0.44 : 0;   // keep the map visible above the Layout panel on phones
+  const availW = W - 28 - sheetW, availH = H - 130 - (sheetH || 90);
+  const k = clamp(Math.min(availW/(x1-x0), availH/(y1-y0)), 0.22, 1.6);
+  const targetY = 124 + availH/2;
+  const cx=(x0+x1)/2 + sheetW/2/k, cy=(y0+y1)/2 - (sheetH ? (targetY - CY())/k : 0);
+  animate ? tweenTo(cx,cy,k) : Object.assign(cam,{x:cx,y:cy,k});
+}
+function zoomToCluster(c){
+  const avail = Math.min(W-40, H-240);
+  tweenTo(c.x, c.y, clamp(avail/(c.R*2+40), 0.6, 2.6));
+}
+
+/* Stars */
+const stars = Array.from({length:160},()=>({x:rand(),y:rand(),s:rand()*1.3+0.2,a:rand()*0.5+0.15,p:rand()*0.6+0.2}));
+
+/* ---------- Drawing ---------- */
+function shapePath(x,y,r,shape){
+  ctx.beginPath();
+  if(shape==='hex'){ const R=r*1.05; for(let i=0;i<6;i++){ const a=Math.PI/6+i*Math.PI/3, px=x+R*Math.cos(a), py=y+R*Math.sin(a); i?ctx.lineTo(px,py):ctx.moveTo(px,py); } ctx.closePath(); }
+  else ctx.arc(x,y,r,0,Math.PI*2);
+}
+const outlineShape = () => theme.shape==='hex' ? 'hex' : 'circle';
+function paintShape(x,y,r,col,alpha,small){
+  const T=theme;
+  ctx.globalAlpha=alpha;
+  if(T.shape==='ring'){
+    ctx.fillStyle=mix(col,T.bg,0.16); shapePath(x,y,r,'circle'); ctx.fill();
+    ctx.strokeStyle=col; ctx.lineWidth=small?1.8:Math.max(2.2, r*0.14);
+    shapePath(x,y,r-ctx.lineWidth/2,'circle'); ctx.stroke();
+  } else if(T.shape==='hex'){
+    ctx.fillStyle=col; ctx.strokeStyle=col; ctx.lineJoin='round'; ctx.lineWidth=r*0.22;
+    shapePath(x,y,r*0.9,'hex'); ctx.fill(); ctx.stroke();
+  } else {
+    ctx.fillStyle=col; shapePath(x,y,r,'circle'); ctx.fill();
+    ctx.strokeStyle=T.bg; ctx.lineWidth=small?1:1.5; ctx.stroke();
+  }
+}
+function drawBubble(t, now, nodeAlpha){
+  const T=theme, col=T.prio[prioOf(t)];
+  const x=t.x, y=t.y, r=Math.max(0.1,t.r);
+  const lw = 1/Math.max(cam.k,0.5);
+  if(t.status==='completed'){
+    ctx.globalAlpha=nodeAlpha*0.6; ctx.strokeStyle=col; ctx.lineWidth=2*lw; ctx.lineJoin='round';
+    shapePath(x,y,r,outlineShape()); ctx.stroke(); ctx.globalAlpha=nodeAlpha; return;
+  }
+  paintShape(x,y,r,col,nodeAlpha*(t.due?1:0.5),false);
+  ctx.globalAlpha = nodeAlpha;
+  const late = t.due && daysUntil(t.due)<0;
+  if(late){
+    const ph=(Math.sin(now/380)+1)/2;
+    ctx.globalAlpha=nodeAlpha*(0.35+0.6*ph); ctx.strokeStyle=T.mark; ctx.lineWidth=2.2*lw; ctx.lineJoin='round';
+    shapePath(x,y,r+5+ph*3,outlineShape()); ctx.stroke(); ctx.globalAlpha=nodeAlpha;
+  }
+  if(isDoing(t.notes)){
+    ctx.setLineDash([5,4]); ctx.lineDashOffset = -now/60;
+    ctx.strokeStyle=T.mark; ctx.globalAlpha=nodeAlpha*0.9; ctx.lineWidth=1.6*lw;
+    shapePath(x,y,r+(late?12:4.5),outlineShape()); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha=nodeAlpha;
+  }
+}
+function draw(now){
+  const T=theme;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle=T.bg; ctx.fillRect(0,0,W,H);
+  if(T.stars){
+    ctx.fillStyle=T.stars;
+    for(const s of stars){
+      const sx = ((s.x*W - cam.x*cam.k*0.03*s.p) % W + W) % W;
+      const sy = ((s.y*H - cam.y*cam.k*0.03*s.p) % H + H) % H;
+      ctx.globalAlpha = s.a*0.8; ctx.fillRect(sx,sy,s.s,s.s);
+    }
+    ctx.globalAlpha=1;
+  }
+  ctx.setTransform(DPR*cam.k,0,0,DPR*cam.k, DPR*(W/2-cam.x*cam.k), DPR*(CY()-cam.y*cam.k));
+
+  // clusters: flat fill + crisp outline
+  for(const c of clusters){
+    const [fill,line]=T.cluster(c.list.hue);
+    const shape = T.clusterHex ? 'hex' : 'circle';
+    ctx.fillStyle=fill; shapePath(c.x,c.y,c.R*(T.clusterHex?1.04:1),shape); ctx.fill();
+    ctx.strokeStyle=line; ctx.lineWidth=1.2/cam.k; ctx.lineJoin='round';
+    if(T.clusterDash) ctx.setLineDash([4/cam.k,6/cam.k]);
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  const nodes = nodesNow(now);
+  const sel = state.sel && byId(state.sel);
+
+  for(const t of nodes){
+    const subs = subPositions(t); if(!subs.length) continue;
+    const a = matches(t) ? 1 : 0.12;
+    ctx.globalAlpha = a*fadeAlpha(t,now); ctx.strokeStyle=T.tether; ctx.lineWidth=1/cam.k;
+    for(const s of subs){ ctx.beginPath(); ctx.moveTo(t.x,t.y); ctx.lineTo(s.x,s.y); ctx.stroke(); }
+  }
+  ctx.globalAlpha=1;
+  const order = [...nodes].sort((a,b)=>a.r-b.r);
+  for(const t of order){
+    const a = (matches(t)?1:0.12) * fadeAlpha(t,now);
+    if(t.fadeT && t.status==='completed' && !state.showDone){
+      const k = clamp((now-t.fadeT)/700,0,1);
+      ctx.globalAlpha=(1-k)*0.8; ctx.strokeStyle=T.prio[prioOf(t)]; ctx.lineWidth=2/cam.k;
+      shapePath(t.x,t.y,t.r*(1+k*0.9),outlineShape()); ctx.stroke();
+      const saved=t.status; t.status='needsAction'; drawBubble(t,now,(1-k)); t.status=saved;
+      continue;
+    }
+    drawBubble(t,now,a);
+    for(const s of childrenOf(t)){
+      const col=T.prio[prioOf(s)], sa = (matches(t)?1:0.12)*fadeAlpha(t,now);
+      if(s.status==='completed'){ ctx.globalAlpha=sa; ctx.strokeStyle=col; ctx.lineWidth=1.5/Math.max(cam.k,.6); ctx.lineJoin='round'; shapePath(s.x,s.y,s.sr,outlineShape()); ctx.stroke(); }
+      else { paintShape(s.x,s.y,s.sr,col,sa,true);
+        if(s.due && daysUntil(s.due)<0){ ctx.globalAlpha=sa*.85; ctx.strokeStyle=T.mark; ctx.lineWidth=1.2/cam.k; shapePath(s.x,s.y,s.sr+2.5,outlineShape()); ctx.stroke(); } }
+    }
+    ctx.globalAlpha=1;
+  }
+  if(sel && (sel.x!=null)){
+    const r = sel.parent ? sel.sr : sel.r;
+    ctx.strokeStyle=T.accent; ctx.lineWidth=2.5/cam.k; ctx.globalAlpha=0.95;
+    shapePath(sel.x,sel.y,r+(sel.parent?4:16)/Math.max(cam.k,.7),outlineShape()); ctx.stroke(); ctx.globalAlpha=1;
+  }
+  for(const t of nodes){ if(t.flashT){ const k=(now-t.flashT)/900; if(k<1){ ctx.globalAlpha=1-k; ctx.strokeStyle=T.accent; ctx.lineWidth=2/cam.k; shapePath(t.x,t.y,t.r+4+k*30,outlineShape()); ctx.stroke(); ctx.globalAlpha=1; } else delete t.flashT; } }
+
+  // ---- labels (screen space, no text shadows) ----
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  const k = cam.k;
+  const clRects=[];
+  const ovl=(r)=>clRects.some(q=>r.x<q.x+q.w && r.x+r.w>q.x && r.y<q.y+q.h && r.y+r.h>q.y);
+  for(const c of [...clusters].sort((a,b)=>b.count-a.count)){
+    const far = k < 0.75;
+    ctx.font = far ? '700 15px system-ui,sans-serif' : '700 11px system-ui,sans-serif';
+    if(ctx.letterSpacing!==undefined) ctx.letterSpacing='1.5px';
+    const name = c.list.name.toUpperCase();
+    const label = far ? `${name}  ${c.count}` : name;
+    const tw = ctx.measureText(label).width;
+    let [sx,sy] = w2s(c.x, c.y - c.R); sy -= 8;
+    const lh = far && c.overdue ? 34 : 18;
+    let rect = {x:sx-tw/2, y:sy-14, w:tw, h:lh};
+    if(ovl(rect)){ const [bx,by]=w2s(c.x, c.y + c.R); sy = by + 18; rect = {x:sx-tw/2, y:sy-14, w:tw, h:lh}; }
+    const nx = clamp(sx, tw/2+8, W-tw/2-8); rect.x += nx-sx; sx = nx;
+    clRects.push(rect);
+    ctx.globalAlpha = far?1:0.8;
+    ctx.fillStyle = T.clusterLabel(c.list.hue);
+    ctx.fillText(label, sx, sy);
+    ctx.globalAlpha = 1;
+    if(far && c.overdue){ ctx.font='600 11.5px system-ui,sans-serif'; ctx.fillStyle=T.ui.alert; ctx.fillText(`${c.overdue} overdue`, sx, sy+16); }
+    if(c.count===0 && !far){ const [cx,cy]=w2s(c.x,c.y); ctx.font='12px system-ui'; ctx.fillStyle=T.labelDim; ctx.fillText('All clear', cx, cy+4); }
+  }
+  if(ctx.letterSpacing!==undefined) ctx.letterSpacing='0px';
+  if(k >= 0.75){
+    const placed = [];
+    const hits = (r)=>placed.some(q=>r.x<q.x+q.w && r.x+r.w>q.x && r.y<q.y+q.h && r.y+r.h>q.y);
+    const cand = nodes.filter(t=>!(t.status==='completed' && t.fadeT && !state.showDone))
+      .map(t=>({t, score:(t.status==='completed'?-100:0) + (matches(t)?50:0) + (prioOf(t)===1?30:prioOf(t)===2?15:prioOf(t)===3?5:0) + t.r}))
+      .sort((a,b)=>b.score-a.score);
+    for(const {t} of cand){
+      const big = t.r*k;
+      if(!(k>=1.35 || big>=(W<820?17:13))) continue;
+      const a = (matches(t)?1:0.25)*fadeAlpha(t,now);
+      const [sx,sy] = w2s(t.x, t.y);
+      if(big>=19 && t.due && t.status!=='completed'){
+        ctx.globalAlpha=a; ctx.font=`800 ${Math.min(13,big*0.42)|0}px system-ui,sans-serif`; ctx.fillStyle=T.dayText;
+        ctx.textBaseline='middle'; ctx.fillText(shortDue(t), sx, sy+1); ctx.textBaseline='alphabetic';
+      }
+      ctx.font = `${prioOf(t)===1?'600 ':'500 '}12px system-ui,sans-serif`;
+      const maxW = Math.max(90, t.r*2*k + 50);
+      const txt = fit(labelOf(t), maxW), tw = ctx.measureText(txt).width;
+      const ly = sy + t.r*k + 16;
+      const rect = {x:sx-tw/2-6, y:ly-13, w:tw+12, h:18};
+      if(hits(rect)) { ctx.globalAlpha=1; continue; }
+      placed.push(rect);
+      ctx.globalAlpha=a;
+      ctx.fillStyle=T.labelBg; roundRect(rect.x, rect.y, rect.w, rect.h, 9); ctx.fill();
+      ctx.fillStyle = t.status==='completed' ? T.labelDim : T.label;
+      ctx.fillText(txt, sx, ly);
+      if(k>=2.2){
+        ctx.font='500 10.5px system-ui,sans-serif'; ctx.textAlign='left';
+        for(const s of childrenOf(t)){ const [ssx,ssy]=w2s(s.x,s.y); const st=fit(labelOf(s),130), sw=ctx.measureText(st).width;
+          const r2={x:ssx+s.sr*k+5,y:ssy-8,w:sw+8,h:15}; if(hits(r2)) continue; placed.push(r2);
+          ctx.fillStyle=T.labelBg; roundRect(r2.x,r2.y,r2.w,r2.h,7); ctx.fill();
+          ctx.fillStyle = s.status==='completed'?T.labelDim:T.label; ctx.fillText(st, r2.x+4, ssy+3.5); }
+        ctx.textAlign='center';
+      }
+      ctx.globalAlpha=1;
+    }
+  }
+}
+function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+const fitCache = new Map();
+function fit(text, maxW){
+  const key = ctx.font+'|'+maxW+'|'+text; if(fitCache.has(key)) return fitCache.get(key);
+  let s=text; if(ctx.measureText(s).width>maxW){ while(s.length>1 && ctx.measureText(s+'…').width>maxW) s=s.slice(0,-1); s=s.trimEnd()+'…'; }
+  if(fitCache.size>3000) fitCache.clear(); fitCache.set(key,s); return s;
+}
+function fadeAlpha(t,now){ return t.fadeT && t.status==='completed' && !state.showDone ? clamp(1-(now-t.fadeT)/700,0,1) : (t.status==='completed'?0.7:1); }
+
+/* ---------- Main loop ---------- */
+function frame(now){
+  if(camTween){
+    const k = clamp((now-camTween.t0)/camTween.ms,0,1), e = 1-Math.pow(1-k,3);
+    const {from,to} = camTween;
+    // interpolate zoom in log space
+    cam.k = Math.exp(Math.log(from.k) + (Math.log(to.k)-Math.log(from.k))*e);
+    cam.x = from.x + (to.x-from.x)*e; cam.y = from.y + (to.y-from.y)*e;
+    if(k>=1) camTween=null;
+  }
+  for(const c of clusters){ c.x += (c.tx-c.x)*0.08; c.y += (c.ty-c.y)*0.08; }
+  const nodes = nodesNow(now);
+  for(const t of nodes){
+    if(t.x==null) placeNew(t);
+    const target = radiusOf(t);
+    t.r = (t.r??0) + (target-(t.r??0))*0.14;
+    t.halo = haloFor(t, t.r);
+  }
+  step(nodes);
+  draw(now);
+  requestAnimationFrame(frame);
+}
+
+/* ---------- Input ---------- */
+const ptrs = new Map(); let gesture=null;
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y), mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+cv.addEventListener('pointerdown', e=>{
+  cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); hideHint(); camTween=null;
+  if(ptrs.size===1) gesture={type:'pan',sx:e.clientX,sy:e.clientY,cx:cam.x,cy:cam.y,moved:false};
+  else if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; const m=mid(a,b); gesture={type:'pinch',d0:dist(a,b),k0:cam.k,w:s2w(m.x,m.y),moved:true}; }
+});
+cv.addEventListener('pointermove', e=>{
+  if(!ptrs.has(e.pointerId)) return;
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(!gesture) return;
+  if(gesture.type==='pan'){
+    const dx=e.clientX-gesture.sx, dy=e.clientY-gesture.sy;
+    if(Math.abs(dx)+Math.abs(dy)>6){ gesture.moved=true; cv.classList.add('dragging'); }
+    if(gesture.moved){ cam.x=gesture.cx-dx/cam.k; cam.y=gesture.cy-dy/cam.k; }
+  } else if(gesture.type==='pinch' && ptrs.size>=2){
+    const [a,b]=[...ptrs.values()]; const m=mid(a,b);
+    cam.k = clamp(gesture.k0*dist(a,b)/gesture.d0,0.22,4);
+    cam.x = gesture.w.x-(m.x-W/2)/cam.k; cam.y = gesture.w.y-(m.y-CY())/cam.k;
+  }
+});
+function endPtr(e){
+  if(!ptrs.has(e.pointerId)) return;
+  ptrs.delete(e.pointerId); cv.classList.remove('dragging');
+  if(gesture && gesture.type==='pan' && !gesture.moved && ptrs.size===0) handleTap(e.clientX,e.clientY);
+  if(ptrs.size===1){ const p=[...ptrs.values()][0]; gesture={type:'pan',sx:p.x,sy:p.y,cx:cam.x,cy:cam.y,moved:true}; }
+  else if(ptrs.size===0) gesture=null;
+}
+cv.addEventListener('pointerup', endPtr); cv.addEventListener('pointercancel', endPtr);
+cv.addEventListener('wheel', e=>{ e.preventDefault(); hideHint(); camTween=null; zoomAt(e.clientX,e.clientY,cam.k*Math.exp(-e.deltaY*0.0016)); }, {passive:false});
+
+function hitTest(sx,sy){
+  const w=s2w(sx,sy), tol=6/cam.k;
+  const nodes = nodesNow(performance.now()).filter(t=>!(t.status==='completed' && !state.showDone));
+  for(const t of nodes) for(const s of childrenOf(t)){ if(s.x!=null && Math.hypot(w.x-s.x,w.y-s.y) <= s.sr+tol) return {task:s}; }
+  let best=null, bd=Infinity;
+  for(const t of nodes){ const d=Math.hypot(w.x-t.x,w.y-t.y); if(d<=t.r+tol && d<bd){best=t;bd=d;} }
+  if(best) return {task:best};
+  for(const c of clusters){ if(Math.hypot(w.x-c.x,w.y-c.y)<=c.R) return {cluster:c}; }
+  return null;
+}
+function handleTap(sx,sy){
+  const h = hitTest(sx,sy);
+  if(h?.task){ openTask(h.task.id, true); return; }
+  if(state.mode){ closeSheet(); return; }
+  if(h?.cluster && cam.k < 1.0) zoomToCluster(h.cluster);
+}
+
+/* ---------- UI: chips, legend, hint ---------- */
+const chipsEl = document.getElementById('chips');
+function renderChips(){
+  const open = tasks.filter(t=>!t.parent && t.status!=='completed');
+  chipsEl.innerHTML = FILTERS.map(f=>{
+    const n = f.id==='all' ? open.length : open.filter(t=>f.test(t) || childrenOf(t).some(s=>s.status!=='completed'&&f.test(s))).length;
+    return `<button class="chip ${state.filter===f.id?'on':''}" data-f="${f.id}">${f.dot?`<i style="background:${PR[1].color}"></i>`:''}${f.name} <b>${n}</b></button>`;
+  }).join('') + `<button class="chip ${state.showDone?'on':''}" data-done="1">Done <b>${tasks.filter(t=>!t.parent&&t.status==='completed').length}</b></button>`;
+}
+chipsEl.addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  if(b.dataset.done){ state.showDone=!state.showDone; layoutClusters(false); reheat(); }
+  else state.filter = (state.filter===b.dataset.f && b.dataset.f!=='all') ? 'all' : b.dataset.f;
+  renderChips();
+});
+document.getElementById('fitBtn').onclick = ()=>fitAll(true);
+const legend = document.getElementById('legend');
+document.getElementById('keyBtn').onclick = e=>{ e.stopPropagation(); legend.classList.toggle('hidden'); };
+document.addEventListener('pointerdown', e=>{ if(!legend.contains(e.target) && e.target.id!=='keyBtn' && !e.target.closest('#keyBtn')) legend.classList.add('hidden'); });
+const hint = document.getElementById('hint'); let hintGone=false;
+function hideHint(){ if(!hintGone){ hintGone=true; hint.classList.add('gone'); } }
+setTimeout(hideHint, 7000);
+
+/* ---------- Toast ---------- */
+const toast=document.getElementById('toast'), toastMsg=document.getElementById('toastMsg'), toastUndo=document.getElementById('toastUndo');
+let toastTimer, undoFn=null;
+function showToast(msg, undo){
+  toastMsg.textContent=msg; undoFn=undo||null; toastUndo.style.display=undo?'':'none';
+  toast.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast.classList.remove('show'), 4200);
+}
+toastUndo.onclick=()=>{ if(undoFn) undoFn(); undoFn=null; toast.classList.remove('show'); };
+
+/* ---------- Model changes ---------- */
+function changed(relayout=true){ if(relayout && clusters.length) layoutClusters(false); reheat(); renderChips(); saveCache(); }
+
+/* ---------- Sheet ---------- */
+const sheet = document.getElementById('sheet');
+function closeSheet(){ sheet.classList.remove('compact'); for(const [id,p] of [...patchTimers]){ clearTimeout(p.timer); patchTimers.delete(id); queue.push({type:'patch', id, list:byId(id)?.list, fields:p.fields}); } if(queue.length){ saveQueue(); flush(); }
+  state.mode=null; state.sel=null; sheet.classList.remove('open'); document.body.classList.remove('sheet-open'); }
+function showSheet(){ sheet.classList.add('open'); document.body.classList.add('sheet-open'); sheet.scrollTop=0; }
+function focusOn(t){
+  if(t.x==null) return;
+  const k = Math.max(cam.k, 1.15);
+  if(W<820) tweenTo(t.x, t.y - (H*0.2 - CY())/k, k, 450);
+  else tweenTo(t.x - ((W-400)/2 - W/2)/k, t.y, k, 450);
+}
+function openTask(id, focus){
+  state.mode='task'; state.sel=id; renderTaskSheet(); showSheet();
+  const t=byId(id); if(focus) focusOn(t.parent?byId(t.parent):t);
+}
+function seg(id, p){ return `<div class="seg" id="${id}">${PR_ORDER.map(k=>`<button type="button" data-p="${k}" class="${k===p?'on':''}"><i style="background:${PR[k].color}"></i>${PR[k].name}</button>`).join('')}</div>`; }
+function autoGrow(el){ el.style.height='auto'; el.style.height=el.scrollHeight+'px'; }
+
+function renderTaskSheet(){
+  const t = byId(state.sel); if(!t){ closeSheet(); return; }
+  const {p,title} = parseTitle(t.raw);
+  const parent = t.parent ? byId(t.parent) : null;
+  const subs = parent ? [] : childrenOf(t);
+  const doing = isDoing(t.notes);
+  const L = listOf(t.list);
+  const dd = t.due ? daysUntil(t.due) : null;
+  const dueCls = dd==null ? '' : dd<0 ? 'late' : dd<=2 ? 'soon' : '';
+  const doneN = subs.filter(s=>s.status==='completed').length;
+  sheet.innerHTML = `
+    <div class="grab"></div>
+    <div class="sh-head">
+      ${parent
+        ? `<button class="chip-link" data-open="${parent.id}">↑ Subtask of ${esc(labelOf(parent))}</button>`
+        : `<label class="listsel"><span class="ldot" style="background:hsl(${L.hue},55%,65%)"></span><select id="f-list" aria-label="List">${LISTS.map(l=>`<option value="${l.id}" ${l.id===t.list?'selected':''}>${esc(l.name)}</option>`).join('')}</select></label>`}
+      <button class="x" id="f-close" aria-label="Close">×</button>
+    </div>
+    <textarea id="f-title" class="title-in" rows="1" aria-label="Title">${esc(title)}</textarea>
+    <div class="due-line ${dueCls}">${t.status==='completed'?'Completed · ':''}${dueText(t)}</div>
+    <div class="field"><div class="flabel">Priority</div>${seg('f-prio',p)}</div>
+    <div class="grid2">
+      <div class="field"><div class="flabel">Due date</div>
+        <div class="date-row"><input type="date" id="f-due" value="${t.due?iso(t.due):''}"><button class="mini" id="f-clear" type="button">Clear</button></div></div>
+      <div class="field"><div class="flabel">Status</div>
+        <button type="button" class="toggle ${doing?'on':''}" id="f-doing"><span class="knob"></span>In progress</button></div>
+    </div>
+    <div class="field"><div class="flabel">Notes</div><textarea id="f-notes" class="notes" rows="3" placeholder="Add notes">${esc(stripDoing(t.notes))}</textarea></div>
+    ${parent ? '' : `
+    <div class="field"><div class="flabel">Subtasks ${subs.length?`<span class="muted">· ${doneN}/${subs.length} done</span>`:''}</div>
+      ${subs.length ? `<div class="subs">${subs.map(s=>{const sp=prioOf(s); const late=s.due&&daysUntil(s.due)<0&&s.status!=='completed';
+        return `<div class="sub ${s.status==='completed'?'done':''}"><button type="button" class="ck" data-ck="${s.id}" style="--c:${PR[sp].color}" aria-label="Toggle done"></button><button type="button" class="sub-t" data-open="${s.id}">${esc(labelOf(s))}</button><span class="sub-d ${late?'late':''}">${shortDue(s)}</span></div>`;}).join('')}</div>` : ''}
+      <div class="addsub"><input class="txt" id="f-newsub" placeholder="Add a subtask (start with !1, !2 or !3 for priority)"><button type="button" class="mini" id="f-addsub">Add</button></div>
+    </div>`}
+    <div class="gt"><span>In Google Tasks:</span><code id="f-raw">${esc(t.raw)}</code><span id="f-rawnotes">${doing?'<code>notes start with #doing</code>':''}</span></div>
+    <div class="actions">
+      <button type="button" class="primary" id="f-done">${t.status==='completed'?'Mark not done':'Mark done'}</button>
+      <button type="button" class="danger" id="f-del">Delete</button>
+    </div>`;
+
+  const $ = s => sheet.querySelector(s);
+  const titleEl = $('#f-title'); autoGrow(titleEl);
+  $('#f-close').onclick = closeSheet;
+  titleEl.addEventListener('input', ()=>{ titleEl.value = titleEl.value.replace(/\n/g,' '); autoGrow(titleEl);
+    // allow typing !1 directly into the title, like in Google Tasks
+    const typed = parseTitle(titleEl.value);
+    const cur = parseTitle(t.raw).p;
+    t.raw = typed.p ? buildTitle(typed.p, typed.title) : buildTitle(cur, titleEl.value);
+    $('#f-raw').textContent = t.raw; changed(false); queuePatch(t, {title:t.raw}, 900);
+    if(typed.p){ renderTaskSheet(); const el=sheet.querySelector('#f-title'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  });
+  $('#f-prio').onclick = e=>{ const b=e.target.closest('button'); if(!b) return; t.raw = buildTitle(+b.dataset.p, parseTitle(t.raw).title); queuePatch(t,{title:t.raw}); changed(); renderTaskSheet(); };
+  $('#f-due').onchange = e=>{ t.due = fromIso(e.target.value); queuePatch(t,{due:dueToApi(t.due)}); changed(); renderTaskSheet(); };
+  $('#f-clear').onclick = ()=>{ t.due=null; queuePatch(t,{due:null}); changed(); renderTaskSheet(); };
+  $('#f-doing').onclick = ()=>{ t.notes = composeNotes(!isDoing(t.notes), stripDoing(t.notes)); queuePatch(t,{notes:t.notes}); changed(false); renderTaskSheet(); };
+  $('#f-notes').addEventListener('input', e=>{ t.notes = composeNotes(isDoing(t.notes), e.target.value.trim()); queuePatch(t,{notes:t.notes}, 900); });
+  const listSel = $('#f-list');
+  const moveTo = (to)=>{ const from=t.list; if(from===to) return; commitAllPending();
+    const subs = childrenOf(t).map(s=>s.id);
+    t.list=to; childrenOf(t).forEach(s=>s.list=to);
+    enqueue({type:'move', id:t.id, from, to, subs}); changed(); return from; };
+  if(listSel) listSel.onchange = e=>{ const from = moveTo(e.target.value); renderTaskSheet();
+    showToast(`Moved to ${listOf(t.list).name}`, ()=>{ moveTo(from); if(state.sel===t.id) renderTaskSheet(); }); };
+  sheet.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openTask(b.dataset.open,false));
+  sheet.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>{ const s=byId(b.dataset.ck); s.status = s.status==='completed'?'needsAction':'completed';
+    queuePatch(s, s.status==='completed'?{status:'completed'}:{status:'needsAction', completed:null}); changed(false); renderTaskSheet(); });
+  const addSub = ()=>{ const inp=$('#f-newsub'); const v=inp.value.trim(); if(!v) return;
+    const typed=parseTitle(v); const st={id:tmpId(), list:t.list, parent:t.id, raw:buildTitle(typed.p, typed.title), notes:'', due:null, status:'needsAction'};
+    tasks.push(st); enqueue({type:'insert', id:st.id, list:st.list, parent:t.id, title:st.raw}); changed(); renderTaskSheet();
+    const again=sheet.querySelector('#f-newsub'); again && again.focus(); };
+  if($('#f-addsub')){ $('#f-addsub').onclick = addSub; $('#f-newsub').onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); addSub(); } }; }
+  $('#f-done').onclick = ()=>{
+    const prev = [t, ...(t.parent?[]:childrenOf(t))].map(x=>[x,x.status]);
+    const setStatus = (x, st) => { if(x.status===st) return; x.status=st; queuePatch(x, st==='completed'?{status:'completed'}:{status:'needsAction', completed:null}); };
+    if(t.status==='completed'){ setStatus(t,'needsAction'); delete t.fadeT; changed(); renderTaskSheet(); return; }
+    t.fadeT=performance.now(); setStatus(t,'completed');
+    if(!t.parent) childrenOf(t).forEach(s=>setStatus(s,'completed'));
+    closeSheet(); changed();
+    showToast(`Completed “${labelOf(t)}”`, ()=>{ prev.forEach(([x,st])=>{ setStatus(x,st); delete x.fadeT; }); changed(); });
+  };
+  const del = $('#f-del');
+  del.onclick = ()=>{
+    if(!del.classList.contains('confirm')){ del.classList.add('confirm'); del.textContent='Tap to confirm'; setTimeout(()=>{ if(del.isConnected){ del.classList.remove('confirm'); del.textContent='Delete'; } },3000); return; }
+    const removed = tasks.filter(x=>x.id===t.id || x.parent===t.id);
+    tasks = tasks.filter(x=>!removed.includes(x));
+    closeSheet(); changed();
+    // Wait until the Undo window passes before deleting in Google Tasks.
+    const ops = removed.slice().reverse().map(x=>({type:'delete', id:x.id, list:x.list}));
+    const key = t.id;
+    pendingDeletes.set(key, {ops, timer:setTimeout(()=>{ pendingDeletes.delete(key); queue.push(...ops); saveQueue(); flush(); }, 5000)});
+    renderStatus();
+    showToast(`Deleted “${labelOf(t)}”`, ()=>{ const p=pendingDeletes.get(key); if(p){ clearTimeout(p.timer); pendingDeletes.delete(key); tasks.push(...removed); changed(); renderStatus(); } });
+  };
+}
+
+/* Quick add */
+let addDraft = null;
+function openAdd(){
+  if(!LISTS.length){ showToast('Sign in to add tasks'); return; }
+  state.mode='add'; state.sel=null;
+  addDraft = {list:hubId(), p:0, due:offDate(0)};
+  renderAddSheet(); showSheet();
+  setTimeout(()=>sheet.querySelector('#a-title')?.focus(), 250);
+}
+function renderAddSheet(){
+  const d = addDraft; const L=listOf(d.list);
+  const dd = d.due ? daysUntil(d.due) : null;
+  const q = [['Today',0],['Tomorrow',1],['Next week',7],['No date',null]];
+  const prevTitle = sheet.querySelector('#a-title')?.value || '';
+  sheet.innerHTML = `
+    <div class="grab"></div>
+    <div class="sh-head"><div class="sh-title">New task</div><button class="x" id="a-close" aria-label="Close">×</button></div>
+    <div class="field"><textarea id="a-title" class="title-in" rows="1" placeholder="What needs doing?">${esc(prevTitle)}</textarea></div>
+    <div class="field"><div class="flabel">List</div>
+      <label class="listsel" style="display:inline-flex"><span class="ldot" style="background:hsl(${L.hue},55%,65%)"></span><select id="a-list">${LISTS.map(l=>`<option value="${l.id}" ${l.id===d.list?'selected':''}>${esc(l.name)}</option>`).join('')}</select></label></div>
+    <div class="field"><div class="flabel">Priority</div>${seg('a-prio',d.p)}</div>
+    <div class="field"><div class="flabel">Due date</div>
+      <input type="date" id="a-due" value="${d.due?iso(d.due):''}">
+      <div class="qdates">${q.map(([n,v])=>`<button type="button" class="mini ${(v===null?dd===null:dd===v)?'on':''}" data-q="${v===null?'':v}">${n}</button>`).join('')}</div></div>
+    <div class="actions"><button type="button" class="primary" id="a-save">Add to ${esc(L.name)}</button></div>`;
+  const $ = s => sheet.querySelector(s);
+  const ti=$('#a-title'); autoGrow(ti);
+  ti.addEventListener('input',()=>{ ti.value=ti.value.replace(/\n/g,' '); autoGrow(ti); });
+  ti.onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); save(); } };
+  $('#a-close').onclick = closeSheet;
+  $('#a-list').onchange = e=>{ d.list=e.target.value; renderAddSheet(); };
+  $('#a-prio').onclick = e=>{ const b=e.target.closest('button'); if(b){ d.p=+b.dataset.p; renderAddSheet(); } };
+  $('#a-due').onchange = e=>{ d.due=fromIso(e.target.value); renderAddSheet(); };
+  sheet.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{ d.due = b.dataset.q==='' ? null : offDate(+b.dataset.q); renderAddSheet(); });
+  function save(){
+    const v = ti.value.trim(); if(!v){ ti.focus(); return; }
+    const typed = parseTitle(v);
+    const t = {id:tmpId(), list:d.list, parent:null, raw: buildTitle(typed.p || d.p, typed.title), notes:'', due:d.due, status:'needsAction', flashT:performance.now()};
+    tasks.push(t); placeNew(t); sheet.querySelector('#a-title').value='';
+    enqueue({type:'insert', id:t.id, list:t.list, title:t.raw, due:dueToApi(t.due)});
+    closeSheet(); changed();
+    showToast(`Added to ${listOf(d.list).name}`, ()=>{ tasks = tasks.filter(x=>x!==t); enqueue({type:'delete', id:t.id, list:t.list}); changed(); });
+  }
+  $('#a-save').onclick = save;
+}
+document.getElementById('fab').onclick = openAdd;
+addEventListener('keydown', e=>{ if(e.key==='Escape'){ if(state.mode) closeSheet(); legend.classList.add('hidden'); } });
+
+/* ---------- Theme UI ---------- */
+function glyph(T, kind, p=1, size=22){
+  const c=T.prio[p], r=7, cx=size/2, cy=size/2;
+  const hexPts=(R)=>Array.from({length:6},(_,i)=>{const a=Math.PI/6+i*Math.PI/3;return `${(cx+R*Math.cos(a)).toFixed(1)},${(cy+R*Math.sin(a)).toFixed(1)}`;}).join(' ');
+  const outline=(R,extra)=> T.shape==='hex' ? `<polygon points="${hexPts(R)}" fill="none" stroke-linejoin="round" ${extra}/>` : `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" ${extra}/>`;
+  const body = T.shape==='ring' ? `<circle cx="${cx}" cy="${cy}" r="${r-1}" fill="${mix(c,T.bg,.16)}" stroke="${c}" stroke-width="2"/>`
+             : T.shape==='hex' ? `<polygon points="${hexPts(r*0.9)}" fill="${c}" stroke="${c}" stroke-width="${r*0.22}" stroke-linejoin="round"/>`
+             : `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${c}"/>`;
+  let extra='';
+  if(kind==='late') extra = outline(r+3.5, `stroke="${T.ui.ink}" stroke-width="1.6"`);
+  if(kind==='doing') extra = outline(r+3.5, `stroke="${T.ui.ink}" stroke-width="1.4" stroke-dasharray="3 2.5"`);
+  if(kind==='done') return `<svg viewBox="0 0 ${size} ${size}">${outline(r, `stroke="${c}" stroke-width="1.8" opacity=".7"`)}</svg>`;
+  if(kind==='sub'){ const sc=T.prio[3]; return `<svg viewBox="0 0 ${size} ${size}"><line x1="${cx}" y1="${cy}" x2="${cx+8}" y2="${cy-6}" stroke="${T.tether}"/><line x1="${cx}" y1="${cy}" x2="${cx+9}" y2="${cy+3}" stroke="${T.tether}"/>${body.replace(/fill="[^"]*"/,`fill="${T.shape==='ring'?mix(T.prio[0],T.bg,.16):T.prio[0]}"`).replace(new RegExp(c,'g'),T.prio[0])}<circle cx="${cx+8}" cy="${cy-6}" r="2.6" fill="${sc}"/><circle cx="${cx+9}" cy="${cy+3}" r="2.3" fill="none" stroke="${sc}" stroke-width="1.2"/></svg>`; }
+  return `<svg viewBox="0 0 ${size} ${size}">${body}${extra}</svg>`;
+}
+function renderLegend(){
+  const T=theme;
+  const sizes=[4,5,7,10,18].map((r,i)=>{ const s=r*2+4; const svg=`<svg viewBox="0 0 ${s} ${s}" width="${s}" height="${s}" style="width:${s}px;height:${s}px">${T.shape==='hex'
+      ? `<polygon points="${Array.from({length:6},(_,j)=>{const a=Math.PI/6+j*Math.PI/3;return `${(s/2+r*0.95*Math.cos(a)).toFixed(1)},${(s/2+r*0.95*Math.sin(a)).toFixed(1)}`;}).join(' ')}" fill="${T.prio[0]}" stroke="${T.prio[0]}" stroke-width="${r*0.2}" stroke-linejoin="round" ${i===0?'opacity=".5"':''}/>`
+      : T.shape==='ring' ? `<circle cx="${s/2}" cy="${s/2}" r="${r-1}" fill="${mix(T.prio[0],T.bg,.16)}" stroke="${T.prio[0]}" stroke-width="2" ${i===0?'opacity=".5"':''}/>`
+      : `<circle cx="${s/2}" cy="${s/2}" r="${r}" fill="${T.prio[0]}" ${i===0?'opacity=".5"':''}/>`}</svg>`; return svg; }).join('');
+  document.getElementById('legend').innerHTML = `
+    <div class="sec"><h4>Color = priority</h4>
+      ${[[1,'!1'],[2,'!2'],[3,'!3'],[0,'no tag']].map(([p,tag])=>`<div class="lg-row">${glyph(T,'plain',p)}${PR[p].name}<code>${tag}</code></div>`).join('')}
+      <div class="muted" style="font-size:11.5px;margin-top:4px">The tag goes at the start of the task title in Google Tasks.</div></div>
+    <div class="sec"><h4>Size = how soon it's due</h4><div class="sizes">${sizes}</div>
+      <div class="sizes-l"><span>no date · 30+ days</span><span>today / overdue</span></div></div>
+    <div class="sec"><h4>Markers</h4>
+      <div class="lg-row">${glyph(T,'late',0)}Overdue (pulsing outline)</div>
+      <div class="lg-row">${glyph(T,'doing',0)}In progress<code>#doing in notes</code></div>
+      <div class="lg-row">${glyph(T,'sub',0)}Subtasks (hollow = done)</div>
+      <div class="lg-row">${glyph(T,'done',0)}Completed (with Done filter on)</div>
+      <div class="muted" style="font-size:11.5px;margin-top:6px">Each cluster is one Google Tasks list.</div></div>`;
+  document.getElementById('keySw').innerHTML = [0,3,2,1].map(p=>`<i style="background:${T.prio[p]}"></i>`).join('');
+}
+function applyTheme(id){
+  theme = THEMES[id] || THEMES.night;
+  for(const k of PR_ORDER) PR[k].color = theme.prio[k];
+  const st=document.documentElement.style;
+  for(const [k,v] of Object.entries(theme.ui)) st.setProperty('--'+k, v);
+  st.setProperty('--p1',theme.prio[1]); st.setProperty('--p2',theme.prio[2]); st.setProperty('--p3',theme.prio[3]);
+  document.documentElement.style.colorScheme = theme.scheme;
+  document.querySelector('meta[name=theme-color]').setAttribute('content', theme.bg);
+  renderLegend(); renderChips();
+  if(state.mode==='task') renderTaskSheet(); else if(state.mode==='add') renderAddSheet();
+}
+
+let settled=false;
+function initialLayout(){
+  for(const t of tasks){ t.r = radiusOf(t); }
+  clusters=[]; syncClusters();
+  if(!clusters.length){ renderChips(); return; }
+  const startNodes = nodesNow(performance.now());
+  startNodes.forEach(t=>{ placeNew(t); t.r=radiusOf(t); t.halo=haloFor(t,t.r); });
+  for(let i=0;i<400;i++) step(startNodes);
+  alpha = 0.3; settled=true;
+  fitAll(false);
+  renderChips();
+}
+
+/* ---------- Setup / sign-in / settings screens ---------- */
+const overlay=document.getElementById('overlay'), ovCard=document.getElementById('ovCard');
+const hideOverlay = () => overlay.classList.add('hidden');
+function copyBtn(text){ return `<div class="copyrow"><code>${esc(text)}</code><button type="button" class="mini" data-copy="${esc(text)}">Copy</button></div>`; }
+overlay.addEventListener('click', e=>{ const b=e.target.closest('[data-copy]'); if(b){ navigator.clipboard?.writeText(b.dataset.copy).then(()=>{ b.textContent='Copied'; setTimeout(()=>b.textContent='Copy',1500); }).catch(()=>{}); } });
+function showSetup(err){
+  overlay.classList.remove('hidden');
+  ovCard.innerHTML = `
+    <div class="brand"><span class="logo"></span>Task Nebula</div>
+    <h1>Connect Google Tasks</h1>
+    <p>One-time setup. Paste the OAuth Client ID from your Google Cloud project. These two addresses must be registered on that client:</p>
+    <div class="flabel">Authorized JavaScript origin</div>${copyBtn(location.origin)}
+    <div class="flabel">Authorized redirect URI</div>${copyBtn(REDIRECT)}
+    <div class="flabel" style="margin-top:6px">OAuth Client ID</div>
+    <input class="txt" id="cid" placeholder="1234567890-abc123.apps.googleusercontent.com" value="${esc(CFG.clientId)}" autocomplete="off" spellcheck="false" style="font-size:16px">
+    <div class="err" id="cidErr">${esc(err||'')}</div>
+    <button class="big" id="cidSave">Save and sign in with Google</button>
+    ${CFG.clientId && (tasks.length) ? '<button class="big ghost" id="cidCancel">Cancel</button>' : ''}`;
+  const inp = ovCard.querySelector('#cid');
+  ovCard.querySelector('#cidSave').onclick = ()=>{
+    const v = inp.value.trim();
+    if(!/^[\w-]+\.apps\.googleusercontent\.com$/.test(v)){ ovCard.querySelector('#cidErr').textContent='That doesn’t look like a Client ID. It ends with .apps.googleusercontent.com'; return; }
+    if(v!==CFG.clientId){ CFG.clientId=v; CFG.hint=''; saveCfg(); auth=null; store.del('auth'); }
+    signIn(false);
+  };
+  const c = ovCard.querySelector('#cidCancel'); if(c) c.onclick=hideOverlay;
+}
+function showSignIn(msg){
+  overlay.classList.remove('hidden');
+  ovCard.innerHTML = `
+    <div class="brand"><span class="logo"></span>Task Nebula</div>
+    <h1>Your tasks, as a map</h1>
+    <p>Sign in with the Google account that has your Google Tasks. Task Nebula reads and edits your tasks directly; nothing is stored anywhere else except a copy on this device.</p>
+    <div class="err">${esc(msg||'')}</div>
+    <button class="big gbtn" id="goSign">Sign in with Google</button>
+    <button class="big ghost" id="goSetup">Change Client ID</button>`;
+  ovCard.querySelector('#goSign').onclick = ()=>signIn(false);
+  ovCard.querySelector('#goSetup').onclick = ()=>showSetup();
+}
+function openSettings(){
+  state.mode='settings'; state.sel=null;
+  const pend = queue.length + pendingCount();
+  sheet.innerHTML = `
+    <div class="grab"></div>
+    <div class="sh-head"><div class="sh-title">Settings</div><button class="x" id="s-close" aria-label="Close">×</button></div>
+    <div class="set-row"><span>Account</span><span>${tokenValid()? esc(CFG.hint||'Signed in') : 'Signed out'}</span></div>
+    <div class="set-row"><span>Last sync</span><span>${lastSync?ago(lastSync):'Never'}</span></div>
+    <div class="set-row"><span>Unsaved changes</span><span>${pend}</span></div>
+    <div class="set-row"><span>Lists · open tasks</span><span>${LISTS.length} · ${tasks.filter(t=>!t.parent&&t.status!=='completed').length}</span></div>
+    <div class="field" style="margin-top:10px"><div class="flabel">Center list</div>
+      <label class="listsel" style="display:inline-flex"><select id="s-hub">${LISTS.map(l=>`<option value="${l.id}" ${l.id===hubId()?'selected':''}>${esc(l.name)}</option>`).join('')}</select></label></div>
+    <div class="field"><div class="flabel">Layout</div>
+      <button class="mini" id="s-layout">Adjust spacing and size…</button></div>
+    <div class="btn-row">
+      <button class="mini" id="s-sync">Sync now</button>
+      <button class="mini" id="s-sign">${tokenValid()?'Switch account':'Sign in'}</button>
+      <button class="mini" id="s-cid">Change Client ID</button>
+      ${pend?'<button class="mini" id="s-discard">Discard unsaved changes</button>':''}
+      <button class="mini" id="s-out" style="color:var(--p1)">Sign out</button>
+    </div>
+    <p class="muted" style="font-size:12px;margin:6px 0 0">Priority: start a task title with !1 (high), !2 (medium) or !3 (low). In progress: #doing in the notes.</p>`;
+  showSheet();
+  const $=q=>sheet.querySelector(q);
+  $('#s-close').onclick=closeSheet;
+  $('#s-layout').onclick=openLayout;
+  $('#s-sync').onclick=()=>{ commitAllPending(); flush(); pull(); closeSheet(); };
+  $('#s-sign').onclick=()=>signIn(false);
+  $('#s-cid').onclick=()=>{ closeSheet(); showSetup(); };
+  $('#s-out').onclick=()=>signOut();
+  $('#s-hub').onchange=e=>{ CFG.hub=e.target.value; saveCfg(); setLists(LISTS); saveCache(); syncClusters(); layoutClusters(true); fitAll(true); changed(); };
+  const d=$('#s-discard'); if(d) d.onclick=()=>{ for(const [,p] of patchTimers) clearTimeout(p.timer); patchTimers.clear(); for(const [,p] of pendingDeletes) clearTimeout(p.timer); pendingDeletes.clear(); queue=[]; saveQueue(); closeSheet(); pull(); };
+}
+const LAYOUT_SLIDERS = [
+  {key:'size',       name:'Bubble size',               min:70, max:150, step:5, unit:'%', hint:'Scales every bubble and subtask; the due-date size ranking stays the same.'},
+  {key:'bubbleGap',  name:'Space between bubbles',     min:2,  max:40,  step:1, unit:'',  hint:'Minimum gap between tasks in the same list, measured from their outlines.'},
+  {key:'satGap',     name:'Subtask distance',          min:2,  max:24,  step:1, unit:'',  hint:'How far subtask dots sit outside their task’s outline.'},
+  {key:'listGap',    name:'Space between lists',       min:20, max:240, step:5, unit:'',  hint:'Minimum gap between list clusters.'},
+  {key:'urgentPull', name:'Urgent tasks to the center',min:0,  max:200, step:10,unit:'%', hint:'Gravity: how strongly big (due-soon) bubbles sink to the middle of their list. 0 = no preference.'},
+];
+function openLayout(){
+  state.mode='layout'; state.sel=null;
+  const val = d => `${LAYOUT[d.key]}${d.unit}${LAYOUT[d.key]===LAYOUT_DEFAULTS[d.key]?' · default':''}`;
+  sheet.classList.add('compact');
+  sheet.innerHTML = `
+    <div class="grab"></div>
+    <div class="sh-head"><button class="mini" id="l-back">‹ Settings</button><div class="sh-title" style="margin-left:6px">Layout</div><button class="x" id="l-close" aria-label="Close">×</button></div>
+    ${LAYOUT_SLIDERS.map(d=>`<div class="lay-row"><div class="lay-top"><b>${d.name}</b><span id="v-${d.key}" class="${LAYOUT[d.key]!==LAYOUT_DEFAULTS[d.key]?'changed':''}">${val(d)}</span></div>
+      <input type="range" id="r-${d.key}" min="${d.min}" max="${d.max}" step="${d.step}" value="${LAYOUT[d.key]}" aria-label="${d.name}">
+      <div class="lay-hint">${d.hint}</div></div>`).join('')}
+    <div class="btn-row"><button class="mini" id="l-reset">Reset to defaults</button><button class="mini" id="l-fit">Fit to screen</button></div>`;
+  showSheet(); fitAll(true);
+  const $=q=>sheet.querySelector(q);
+  const relayout = () => { layoutClusters(false); reheat(1); renderChips(); };
+  for(const d of LAYOUT_SLIDERS){
+    const r=$('#r-'+d.key), v=$('#v-'+d.key);
+    r.oninput = ()=>{ LAYOUT[d.key]=+r.value; saveLayout(); v.textContent=val(d); v.className = LAYOUT[d.key]!==LAYOUT_DEFAULTS[d.key]?'changed':''; relayout(); };
+    r.onchange = ()=>fitAll(true);
+  }
+  $('#l-reset').onclick=()=>{ LAYOUT=Object.assign({},LAYOUT_DEFAULTS); saveLayout(); relayout(); fitAll(true); openLayout(); };
+  $('#l-fit').onclick=()=>fitAll(true);
+  $('#l-back').onclick=()=>{ sheet.classList.remove('compact'); openSettings(); };
+  $('#l-close').onclick=closeSheet;
+}
+document.getElementById('setBtn').onclick = ()=> (state.mode==='settings'||state.mode==='layout') ? closeSheet() : openSettings();
+
+/* ---------- Start ---------- */
+applyTheme('night');
+const authResult = consumeRedirect();
+const hadCache = loadCache();
+if(hadCache) initialLayout(); else renderChips();
+renderStatus();
+if(!CFG.clientId){
+  showSetup();
+} else if(authResult && authResult!=='ok'){
+  // Silent renewal failed or sign-in was cancelled: ask explicitly.
+  if(hadCache){ renderStatus(); showToast(authResult==='access_denied' ? 'Sign-in was cancelled' : 'Please sign in again to sync'); }
+  else showSignIn(authResult==='access_denied' ? 'Sign-in was cancelled.' : authResult==='state_mismatch' ? 'Sign-in didn’t complete. Please try again.' : `Google said: ${authResult}`);
+} else if(!tokenValid()){
+  if(hadCache) needAuth(); else showSignIn();
+} else {
+  learnEmail(); flush(); pull();
+}
+requestAnimationFrame(frame);
+if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>
